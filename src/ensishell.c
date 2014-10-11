@@ -30,6 +30,9 @@ struct jobs_ls {
     struct jobs_ls *next;   // next background child
 };
 
+/*
+ * Print current background jobs
+ */
 void jobs_print(struct jobs_ls *it)
 {
     printf("Current jobs :\n");
@@ -39,11 +42,17 @@ void jobs_print(struct jobs_ls *it)
     }
 }
 
+/*
+ * Message to be printed when a job ends
+ */
 void jobs_endmsg(struct jobs_ls *j)
 {
     printf("%8d : %s terminated\n", j->pid, j->name);
 }
 
+/*
+ * Print details of current command
+ */
 void print_cmd(struct cmdline *l)
 {
     printf("\n");
@@ -71,21 +80,23 @@ void print_cmd(struct cmdline *l)
     printf("\n");
 }
 
-void get_finish_jobs(struct jobs_ls *jobs)
+/*
+ * close finished jobs
+ */
+void get_finish_jobs(struct jobs_ls **jobs)
 {
     int pid_w, status;
 
-    pid_w = waitpid(0, &status, WNOHANG);
-    if (pid_w > 0) {
+    while ((pid_w = waitpid(0, &status, WNOHANG)) > 0) {
         struct jobs_ls *it, *it_prev;
 
-        it      = jobs;
-        it_prev = jobs;
+        it      = *jobs;
+        it_prev = *jobs;
         while (it != NULL) {
             if (it->pid == pid_w) {
                 jobs_endmsg(it);
-                if ((it_prev == jobs) && (it->next == NULL)) {
-                    jobs = NULL;
+                if ((it_prev == *jobs) && (it->next == NULL)) {
+                    *jobs = NULL;
                 } else {
                     it_prev->next = it->next;
                 }
@@ -99,7 +110,7 @@ void get_finish_jobs(struct jobs_ls *jobs)
     }
 }
 
-void father(struct cmdline *l, struct jobs_ls* jobs, pid_t pid)
+void father(struct cmdline *l, struct jobs_ls** jobs, pid_t pid)
 {
     int status;
 
@@ -108,18 +119,19 @@ void father(struct cmdline *l, struct jobs_ls* jobs, pid_t pid)
         strncpy(bg->name, l->seq[0][0], SIZE_ARRAY(bg->name));
         bg->name[SIZE_ARRAY(bg) - 1] = '\0';
         bg->pid  = pid;
-        if (jobs) {
-            bg->next = jobs->next;
-            jobs->next = bg;
+        if (*jobs) {
+            bg->next = (*jobs)->next;
+            (*jobs)->next = bg;
         } else {
-            jobs = bg;
+            *jobs = bg;
         }
     } else {
+        // wait end of command
         waitpid(pid, &status, 0);
     }
 }
 
-void child(struct cmdline *l)
+int child(struct cmdline *l)
 {
     int err;
 
@@ -135,7 +147,7 @@ void child(struct cmdline *l)
         err = execvp(l->seq[0][0], l->seq[0]);
     }
     fprintf(stderr, "error %d\n", err);
-    exit(EXIT_FAILURE);
+    return EXIT_FAILURE;
 }
 
 int main()
@@ -163,25 +175,27 @@ int main()
         }
 
         print_cmd(l);
-        get_finish_jobs(jobs);
+        get_finish_jobs(&jobs);
 
+        // execute command
         if (l->seq[0] != 0) {
 
+            // jobs
             if (!strcmp(l->seq[0][0], "jobs")) {
                 jobs_print(jobs);
             }
 
+            // other commands
             else {
                 pid_t pid = fork();
 
                 if (!pid) {
-                    father(l, jobs, pid);
+                    exit(child(l));
                 } else if ( pid > 0) {
-                    father(l, jobs, pid);
+                    father(l, &jobs, pid);
                 } else {
                     perror("Cannot fork\n");
                 }
-
             }
         }
     }
