@@ -206,13 +206,13 @@ int main()
                             freopen(l->out, "w", stdout);
                         }
 
-                        if ((i == 0) && (i != nb_cmd -1)) {
+                        if (i < nb_cmd -1) {
                             dup2(crnt_pipe[1], 1);
                             close(crnt_pipe[0]);
                             close(crnt_pipe[1]);
                         }
 
-                        if ((i == nb_cmd -1) && (i != 0)) {
+                        if (i > 0) {
                             dup2(last_pipe[0], 0);
                             close(last_pipe[1]);
                             close(last_pipe[0]);
@@ -221,16 +221,25 @@ int main()
                         }
 
                         int err;
-                        /*fprintf(stderr, "%s\n", l->seq[i][0]);*/
                         err = execvp(l->seq[i][0], l->seq[i]);
                         fprintf(stderr, "error %d\n", err);
                         exit(EXIT_FAILURE);
-                    } else if (pid < 0) {
+                    }
+
+                    if (pid < 0) {
                         perror("Cannot fork\n");
                     }
+
+                    if (i > 0) {
+                        close(last_pipe[1]);
+                        close(last_pipe[0]);
+                    }
+
                     last_pipe[0] = crnt_pipe[0];
                     last_pipe[1] = crnt_pipe[1];
                 }
+                close(last_pipe[1]);
+                close(last_pipe[0]);
                 father(l->seq[0], l->bg, &jobs, pid);
             }
         }
