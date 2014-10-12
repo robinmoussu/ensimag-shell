@@ -187,11 +187,13 @@ int main()
                 for(nb_cmd = 0; l->seq[nb_cmd] != 0; nb_cmd++) {
                     ;}
 
-                /*int *last_pipe;*/
+                int last_pipe[2] = {0,1};
                 pid_t pid;
-                    int crnt_pipe[2];
-                    pipe(crnt_pipe);
                 for(int i = 0; i < nb_cmd; i++) {
+                    int crnt_pipe[2];
+                    if (i != nb_cmd - 1) {
+                        pipe(crnt_pipe);
+                    }
 
                     pid = fork();
                     if (!pid) {
@@ -211,7 +213,9 @@ int main()
                         }
 
                         if ((i == nb_cmd -1) && (i != 0)) {
-                            dup2(crnt_pipe[0], 0);
+                            dup2(last_pipe[0], 0);
+                            close(last_pipe[1]);
+                            close(last_pipe[0]);
                             close(crnt_pipe[1]);
                             close(crnt_pipe[0]);
                         }
@@ -224,7 +228,8 @@ int main()
                     } else if (pid < 0) {
                         perror("Cannot fork\n");
                     }
-                    /*last_pipe = crnt_pipe;*/
+                    last_pipe[0] = crnt_pipe[0];
+                    last_pipe[1] = crnt_pipe[1];
                 }
                 father(l->seq[0], l->bg, &jobs, pid);
             }
