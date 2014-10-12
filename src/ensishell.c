@@ -20,7 +20,6 @@
 #endif
 
 #include <string.h>
-#include <assert.h>
 
 #define SIZE_ARRAY(a) (sizeof((a))/sizeof((a)[0]))
 
@@ -106,7 +105,6 @@ void get_finish_jobs(struct jobs_ls **jobs)
             it_prev = it;
             it      = it->next;
         }
-        assert(it != NULL);
     }
 }
 
@@ -172,7 +170,7 @@ int main()
             continue;
         }
 
-        print_cmd(l);
+        /*print_cmd(l);*/
         get_finish_jobs(&jobs);
 
         // execute command
@@ -190,20 +188,45 @@ int main()
                     ;}
 
                 /*int *last_pipe;*/
+                pid_t pid;
+                    int crnt_pipe[2];
+                    pipe(crnt_pipe);
                 for(int i = 0; i < nb_cmd; i++) {
-                    int curnt_pipe[2];
-                    pipe(curnt_pipe);
 
-                    pid_t pid = fork();
+                    pid = fork();
                     if (!pid) {
-                        exit(child(l->seq[i], l->in, l->out));
-                    } else if ( pid > 0) {
-                        father(l->seq[i], l->bg, &jobs, pid);
-                    } else {
+
+                        if ((l->in) && (i == 0)) {
+                            freopen(l->in, "r", stdin);
+                        }
+
+                        if ((l->out) && (i == nb_cmd -1)) {
+                            freopen(l->out, "w", stdout);
+                        }
+
+                        if ((i == 0) && (i != nb_cmd -1)) {
+                            dup2(crnt_pipe[1], 1);
+                            close(crnt_pipe[0]);
+                            close(crnt_pipe[1]);
+                        }
+
+                        if ((i == nb_cmd -1) && (i != 0)) {
+                            dup2(crnt_pipe[0], 0);
+                            close(crnt_pipe[1]);
+                            close(crnt_pipe[0]);
+                        }
+
+                        int err;
+                        /*fprintf(stderr, "%s\n", l->seq[i][0]);*/
+                        err = execvp(l->seq[i][0], l->seq[i]);
+                        fprintf(stderr, "error %d\n", err);
+                        exit(EXIT_FAILURE);
+                    } else if (pid < 0) {
                         perror("Cannot fork\n");
                     }
-                    /*last_pipe = curnt_pipe;*/
+                    /*last_pipe = crnt_pipe;*/
                 }
+                father(l->seq[0], l->bg, &jobs, pid);
             }
         }
     }
