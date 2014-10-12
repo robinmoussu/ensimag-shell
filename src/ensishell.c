@@ -143,9 +143,7 @@ int child(char **seq, char *in, char *out)
         freopen(out, "w", stdout);
     }
 
-    for (int i = 0; seq != 0; i++) {
-        err = execvp(seq[0], seq);
-    }
+    err = execvp(seq[0], seq);
     fprintf(stderr, "error %d\n", err);
     return EXIT_FAILURE;
 }
