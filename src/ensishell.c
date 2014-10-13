@@ -8,7 +8,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <string.h>
+
 #include <unistd.h>
+#include <glob.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -18,8 +21,6 @@
 #ifndef VARIANTE
 #error "Variante non défini !!"
 #endif
-
-#include <string.h>
 
 #define SIZE_ARRAY(a) (sizeof((a))/sizeof((a)[0]))
 
@@ -181,6 +182,12 @@ int main()
                 jobs_print(jobs);
             }
 
+            // exit
+            if (!strcmp(l->seq[0][0], "exit")) {
+                printf("exit\n");
+                exit(EXIT_SUCCESS);
+            }
+
             // other commands
             else {
                 int nb_cmd;
@@ -191,7 +198,7 @@ int main()
                 pid_t pid;
                 for(int i = 0; i < nb_cmd; i++) {
                     int crnt_pipe[2];
-                    if (i != nb_cmd - 1) {
+                    if (i < nb_cmd - 1) {
                         pipe(crnt_pipe);
                     }
 
@@ -220,8 +227,26 @@ int main()
                             close(crnt_pipe[0]);
                         }
 
+                        char **cmd = l->seq[i];
+                        if (l->seq[i][1] != 0) {
+                            // expand jockers
+                            glob_t globbuf;
+                            int flags = GLOB_DOOFFS | GLOB_NOCHECK | GLOB_MARK
+                                | GLOB_BRACE | GLOB_TILDE;
+
+                            globbuf.gl_offs = 1;
+                            glob(l->seq[i][1], flags, NULL, &globbuf);
+                            for(int j = 2; l->seq[i][j] != 0; j++) {
+                                fprintf(stderr, "%s\n", l->seq[i][j]);
+                                glob(l->seq[i][j], flags | GLOB_APPEND, NULL, &globbuf);
+                            }
+                            globbuf.gl_pathv[0] = l->seq[i][0];
+
+                            cmd = globbuf.gl_pathv;
+                        }
+
                         int err;
-                        err = execvp(l->seq[i][0], l->seq[i]);
+                        err = execvp(l->seq[i][0], cmd);
                         fprintf(stderr, "error %d\n", err);
                         exit(EXIT_FAILURE);
                     }
@@ -238,8 +263,10 @@ int main()
                     last_pipe[0] = crnt_pipe[0];
                     last_pipe[1] = crnt_pipe[1];
                 }
-                close(last_pipe[1]);
-                close(last_pipe[0]);
+                if (nb_cmd > 1) {
+                    close(last_pipe[1]);
+                    close(last_pipe[0]);
+                }
                 father(l->seq[0], l->bg, &jobs, pid);
             }
         }
